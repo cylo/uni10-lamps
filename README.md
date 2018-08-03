@@ -1,6 +1,6 @@
 # LAMPS
 
-Learning / Adversarial learning using Matrix Product States
+Learning / Adversarial learning using Matrix Product States  
 Powered by [**pyUni10**](https://uni10-tutorials.readthedocs.io/en/latest/index.html) -- the python wrapper of [**Uni10**](https://github.com/yingjerkao/uni10) library (v1.0)
 
 # Requirements
