@@ -1,6 +1,8 @@
 # LAMPS
 
 Learning / Adversarial learning using Matrix Product States  
+
+Based on "Supervised Learning with Quantum Inspired Tensor Networks" http://arxiv.org/abs/1605.05775  
 Powered by [**pyUni10**](https://uni10-tutorials.readthedocs.io/en/latest/index.html) -- the python wrapper of [**Uni10**](https://github.com/yingjerkao/uni10) library (v1.0)
 
 # Requirements
