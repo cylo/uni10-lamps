@@ -1,5 +1,6 @@
 import os
 from imagemps import *
+from utils import tensor_to_ndarray
 
 class ClassifierMPS(MPS):
     """
@@ -140,7 +141,7 @@ class ClassifierMPS(MPS):
     def predict(self, img_data, verbose=False, **kwargs):
         """"""
         dfb = self.decision_function(img_data, **kwargs).getBlock()
-        df = np.array([dfb[i] for i in xrange(self.dl)] )
+        df = tensor_to_ndarray(dfb)
         if verbose:
             return df
         return np.argmax(df)

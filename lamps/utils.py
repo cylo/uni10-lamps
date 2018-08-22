@@ -18,3 +18,14 @@ def true_label_vec(true_label, dim_label):
 
 def l2_norm(vec):
     return contract(vec, vec, False)[0]
+
+def matrix_to_ndarray(mtx):
+    row = mtx.row()
+    col = mtx.col()
+    elem = [mtx[i*col + j] for i in xrange(row) for j in xrange(col)]
+    return np.array(elem).reshape((row, col))
+
+def tensor_to_ndarray(ut):
+    en = ut.elemNum()
+    elem = [ut[i] for i in xrange(en)]
+    return np.array(elem)

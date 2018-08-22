@@ -5,7 +5,7 @@ l = 10
 m = 10
 
 ## number of sweeps (int)
-sw = 2
+sw = 4
 
 ## number of training images (int)
 Ntrain = 50

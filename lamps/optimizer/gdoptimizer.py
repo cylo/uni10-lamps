@@ -156,7 +156,7 @@ def mp_ef_projection(args):
         netd.putTensor("PHIJ", shared.PHI[s][idx+1])
         netd.putTensor("PHIR", shared.PHI_RN[s][idx+2])
         df = netd.launch()
-        df.permute(1) # Mysteriously, sometimes Pool.map mess up the final permute in launch!
+        # df.permute(1) # Mysteriously, sometimes Pool.map mess up the final permute in launch!
         ef = shared.TL[s] + (-1.)*df
 
         scale = [1., 1., 1., 1.]

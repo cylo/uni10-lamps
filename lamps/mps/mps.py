@@ -1,6 +1,8 @@
 from pyUni10 import *
 import numpy as np
 
+from utils import matrix_to_ndarray, tensor_to_ndarray
+
 class MPS(object):
     """
     """
@@ -160,17 +162,6 @@ class MPS(object):
                 "example tensor structure:\n{}"
                ).format(self.len, self.chi_max, self.obc, self.__label_ordered, is_prod, ut_str) 
 
-
-def matrix_to_ndarray(mtx):
-    row = mtx.row()
-    col = mtx.col()
-    elem = [mtx[i*col + j] for i in xrange(row) for j in xrange(col)]
-    return np.array(elem).reshape((row, col))
-
-def tensor_to_ndarray(ut):
-    en = ut.elemNum()
-    elem = [ut[i] for i in xrange(en)]
-    return np.array(elem)
 
 def direct_sum_ndarray(nda1, nda2):
     dsum = np.zeros( np.add(nda1.shape, nda2.shape) )
