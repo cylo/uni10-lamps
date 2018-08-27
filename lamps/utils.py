@@ -8,6 +8,7 @@ def load_networks(net_dir=shared.NETDIR):
     nets["decision_fn_right"] = Network(net_dir + "/decision_fn_right.net")
     nets["label_projection"] = Network(net_dir + "/label_projection.net")
     nets["measurement"] = Network(net_dir + "/measurement.net")
+    nets["lvec_update"] = Network(net_dir + "/lvec_update.net")
     return nets
 
 def true_label_vec(true_label, dim_label):

@@ -219,3 +219,103 @@ class ClassifierMPS(MPS):
         if snake:
             return img_mps.mps_to_img_snake(func)
         return img_mps.mps_to_img(func)
+
+    def generate_sample(self, img_data, copy_px=1,
+                        to_mps=grayscale_to_spinor, to_img=spinor_to_grayscale, snake=False):
+        """"""
+        assert self.__bdry_dummy and img_data._ImageMPS__bdry_dummy, 'Boundary dummies not found.'
+
+        # contract the selected label
+        lab_vec = true_label_vec(img_data.label, self.dl)
+        lab_vec.setLabel([-10])
+        swl = contract(lab_vec, self.w[self.sl])
+        swl.permute(self.w[self.sl].inBondNum()-1)
+
+        # define operators for measurement
+        phi_w = UniTensor([Bond(BD_IN, 2)]); phi_w.setElem(to_mps(0.00))  # white
+        phi_p = UniTensor([Bond(BD_IN, 2)]); phi_p.setElem(to_mps(0.25))  # pale
+        phi_g = UniTensor([Bond(BD_IN, 2)]); phi_g.setElem(to_mps(0.50))  # grey
+        phi_d = UniTensor([Bond(BD_IN, 2)]); phi_d.setElem(to_mps(0.75))  # dark
+        phi_b = UniTensor([Bond(BD_IN, 2)]); phi_b.setElem(to_mps(1.00))  # black
+        NW = otimes(phi_w, phi_w); NW.permute(1)
+        NP = otimes(phi_p, phi_p); NP.permute(1)
+        NG = otimes(phi_g, phi_g); NG.permute(1)
+        ND = otimes(phi_d, phi_d); ND.permute(1)
+        NB = otimes(phi_b, phi_b); NB.permute(1)
+
+        # construct left-vec/right-vec buffer
+        lv = [UniTensor() for _ in xrange(self.len)]
+        rv = [UniTensor() for _ in xrange(self.len)]
+        for i in xrange(copy_px+1):
+            wi = swl * 1. if i == self.sl else self.w[i] * 1.
+            wd = wi * 1.  # w^dagger
+            _ , labs = in_out_bonds(wi)
+            labs[1][0] *= -1
+            if i > 0:
+                labs[0][0] *= -1
+                labs[1][1] *= -1
+            wd.setLabel(labs[0]+labs[1])
+            if i == 0:
+                lv[i] = wi * wd
+            else:
+                NI = otimes(img_data[i], img_data[i]); NI.permute(1)
+                NI.setLabel([wi.label()[2], wd.label()[2]])
+                lv[i] = wi * lv[i-1] * NI * wd
+
+        for i in xrange(self.len-1, copy_px, -1):
+            wi = swl * 1. if i == self.sl else self.w[i] * 1.
+            wd = wi * 1.
+            _ , labs = in_out_bonds(wi)
+            labs[0][0] *= -1
+            if i < self.len-1: labs[1][0] *= -1
+            wd.setLabel(labs[0]+labs[1])
+            rv[i] = wi * wd if i == self.len-1 else wi * rv[i+1] * wd
+
+        # generative sampling
+        res = [img_data[i] * 1. for i in xrange(1, copy_px+1)]
+        netm = self.net["measurement"]
+        netl = self.net["lvec_update"]
+        for i in xrange(copy_px+1, self.px+1):
+            wi = swl * 1. if i == self.sl else self.w[i] * 1.
+            wd = wi * 1.
+            netm.putTensor("WI", wi)
+            netm.putTensor("WD", wd)
+            netm.putTensor("LV", lv[i-1])
+            netm.putTensor("RV", rv[i+1])
+            netm.putTensor("OP", NW)
+            nw = netm.launch()[0]
+            netm.putTensor("OP", NP)
+            np_ = netm.launch()[0]
+            netm.putTensor("OP", NG)
+            ng = netm.launch()[0]
+            netm.putTensor("OP", ND)
+            nd = netm.launch()[0]
+            netm.putTensor("OP", NB)
+            nb = netm.launch()[0]
+
+            netl.putTensor("WI", wi)
+            netl.putTensor("WD", wd)
+            netl.putTensor("LV", lv[i-1])
+            if max(nw, np_, ng, nd, nb) == nw:
+                res += [phi_w * 1.]
+                netl.putTensor("OP", NW)
+            elif max(nw, np_, ng, nd, nb) == np_:
+                res += [phi_p * 1.]
+                netl.putTensor("OP", NP)
+            elif max(nw, np_, ng, nd, nb) == ng:
+                res += [phi_g * 1.]
+                netl.putTensor("OP", NG)
+            elif max(nw, np_, ng, nd, nb) == nd:
+                res += [phi_d * 1.]
+                netl.putTensor("OP", ND)
+            else:
+                res += [phi_b * 1.]
+                netl.putTensor("OP", NB)
+            lv[i] = netl.launch()
+
+        # convert mps into image
+        img_mps = ImageMPS(np.zeros((self.wd, self.ht)))
+        img_mps.import_tensors(res)
+        if snake:
+            return img_mps.mps_to_img_snake(to_img)
+        return img_mps.mps_to_img(to_img)
