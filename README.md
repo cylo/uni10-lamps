@@ -7,12 +7,13 @@ Powered by [**pyUni10**](https://uni10-tutorials.readthedocs.io/en/latest/index.
 
 # Current project status
 
-Infrastructure for MPS Learning mostly done  
+Infrastructure for MPS learning mostly done  
+Primitive sample generator up and working  
 GAN not yet implemented
 
 # Requirements
  - [pyUni10-1.0](https://uni10-tutorials.readthedocs.io/en/latest/index.html) or [pyUni10-rev](https://github.com/cylo/uni10) (for multiprocessing)
  - python 2.7
- - NumPy > 1.12.0
+ - numpy > 1.12.0
  - scikit-image
- - Keras (not required. recommended)
+ - keras (not required. recommended)
