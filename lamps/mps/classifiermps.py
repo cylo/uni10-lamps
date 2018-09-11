@@ -148,12 +148,37 @@ class ClassifierMPS(MPS):
     
     def accuracy(self, image_set, **kwargs):
         """"""
-        global USE_MP, PROCS
         correct = []
         for s in xrange(image_set.size):
             correct.append(self.predict(image_set[s], **kwargs) == image_set[s].label)
         return sum(correct)/float(len(correct))
     
+    def overlap(self, other):
+        """"""
+        same_struct = (self.len == other.len)
+        same_struct *= (self.dp == other.dp)
+        same_struct *= (self.sl == other.sl)
+        same_struct *= (self.w[self.sl].label()[-1] == other.w[other.sl].label()[-1])
+        same_struct *= (self._MPS__label_ordered and other._MPS__label_ordered)
+        if same_struct:
+            expv = UniTensor(); norm = UniTensor()
+            for i in xrange(self.len-1):
+                wsi = self.w[i] * 1.
+                woi = other.w[i] * 1.
+                _ , labs = in_out_bonds(wsi)
+                if i < self.len-1: labs[1][0] *= -1
+                if i > 0: labs[0][0] *= -1
+                woi.setLabel(labs[0]+labs[1])
+                expv = wsi * woi if i == 0 else wsi * expv * woi
+
+                wsd = self.w[i] * 1.
+                wsd.setLabel(labs[0]+labs[1])
+                norm = wsi * wsd if i == 0 else wsi * norm * wsd
+            return expv[0]/norm[0]
+        else:
+            print "MPS to be calculated have different structures."
+            raise RuntimeError
+
     def feature_map(self, label, func=spinor_to_grayscale, snake=False):
         """"""
         assert self.__bdry_dummy, 'Boundary dummies not found.'
@@ -161,6 +186,7 @@ class ClassifierMPS(MPS):
         # contract the selected label
         lab_vec = true_label_vec(label, self.dl)
         lab_vec.setLabel([-10])
+        assert -10 in self.w[self.sl].label(), 'Site with label bond index error.'
         swl = contract(lab_vec, self.w[self.sl])
         swl.permute(self.w[self.sl].inBondNum()-1)
         

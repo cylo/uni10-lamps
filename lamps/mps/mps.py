@@ -12,36 +12,36 @@ class MPS(object):
         self.chi_max = chi_max
         self.obc = True
         self.__label_ordered = False
-        
+
     @classmethod
     def from_mps(cls, other):
         mps = cls(other.len, other.chi_max)
         mps.import_tensors(other)
         return mps
-    
+
     @classmethod
     def from_list(cls, list_ten, chi_max=10):
         len_mps = len(list_ten)
         mps = cls(len_mps, chi_max)
         mps.import_tensors(list_ten)
         return mps
-    
+
     def import_tensors(self, tensors):
         for i in xrange(self.len):
             self.__mps[i] = tensors[i] * 1.
 
     def __getitem__(self, idx):
         return self.__mps[idx]
-    
+
     def __setitem__(self, idx, val):
         self.__mps[idx] = val
-        
+
     def assign(self, bonds):
         for i in xrange(self.len):
             self.__mps[i].assign(bonds)
         if self.obc and not self.is_product():
             self.assign_obc()
-            
+
     def assign_obc(self, obc_in_idx=0, obc_out_idx=0):
         # stick virt bonds to 1st in-bond and 1st out-bond
         bdl, _ = in_out_bonds(self.__mps[0])
@@ -51,28 +51,28 @@ class MPS(object):
         self.__mps[0].assign(bdl[0] + bdl[1])
         self.__mps[-1].assign(bdr[0] + bdr[1])
         self.obc = True
-            
+
     def randomize(self, scale=1.):
         for i in xrange(self.len):
             self.__mps[i].randomize()
             self.__mps[i] *= scale
-            
+
     def uniform(self, scale=1.):
         for i in xrange(self.len):
             elem = np.ones(self.__mps[i].elemNum()) * scale
             self.__mps[i].setElem(elem)
-            
+
     def insert(self, idx, ut):
         self.__mps.insert(idx, ut*1.)
         self.len += 1
         self.__label_ordered = False
-            
+
     def is_product(self):
         """check product state"""
         ibn = self.__mps[-1].inBondNum()
         obn = self.__mps[0].bondNum() - self.__mps[0].inBondNum()
         return (ibn == 0 or obn == 0)
-            
+
     def direct_sum(self, other, sum_chi=False):
         prod1 = self.is_product()
         prod2 = other.is_product()
@@ -87,7 +87,7 @@ class MPS(object):
         if sum_chi:
             self.chi_max += other.chi_max
         self.__label_ordered = False
-            
+
     def auto_labels(self, phys_lab_base=10000, phys_lab_inc=10, phys_lab_inc_onsite=1):
         prod = self.is_product()
         for i in xrange(self.len):
@@ -109,43 +109,47 @@ class MPS(object):
                     
             self.__mps[i].setLabel(labs)
         self.__label_ordered = True
-        
+
     def mps_svd(self, chi_max=-1, sweep_left_to_right=False, cutoff=1e-10, normalize=True, **kwargs):
         if chi_max > 0: self.chi_max = chi_max
         if not self.__label_ordered: self.auto_labels()
         loop_range = xrange(self.len-1) if sweep_left_to_right else xrange(self.len-2, -1, -1)
+        # loop_range = xrange(self.len-1) if sweep_left_to_right else xrange(self.len-1, 0, -1)
+        # inc = int(sweep_left_to_right)*2 - 1
         for i in loop_range:
             bond_svd(self.__mps[i], self.__mps[i+1], self.chi_max,
                      merge_sv_right=sweep_left_to_right, cutoff=cutoff, normalize=normalize, **kwargs)
-            
+            # site_svd(self.__mps[i], self.__mps[i+inc], self.chi_max,
+            #          merge_sv_right=sweep_left_to_right, cutoff=cutoff, normalize=normalize, **kwargs)
+
     def add(self, other, chi_max=-1, cutoff=1e-10, normalize=True, **kwargs):
         self.direct_sum(other, False)
         self.chi_max = chi_max if chi_max > 0 else max(self.chi_max, other.chi_max)
         self.mps_svd(self.chi_max, False, cutoff, normalize, **kwargs)
-            
+
     def __add__(self, other):
         mps = MPS.from_mps(self)
         mps.add(other)
         return mps
-    
+
     def __iadd__(self, other):
         self.add(other)
         return self
-    
+
     def __mul__(self, scale):
         mps = MPS.from_mps(self)
         for i in xrange(mps.len):
             mps[i] *= scale
         return mps
-    
+
     def __imul__(self, scale):
         for i in xrange(self.len):
             self.__mps[i] *= scale
         return self
-    
+
     def __len__(self):
         return self.len
-    
+
     def __str__(self):
         assert self.len == len(self.__mps), 'MPS length settings inconsistent.'
         if self.len > 0:
@@ -261,7 +265,7 @@ def bond_svd(ut1, ut2, chi_max, theta=None, th_struct=(None, None),
     common = common_label(lab1, lab2)
     if len(common) != 1:
         raise RuntimeError("Cannot perform SVD update other than single bond.")
-    
+
     if theta == None:
         theta = contract(ut1, ut2)
     if th_struct[0] and th_struct[1]:
@@ -298,3 +302,62 @@ def bond_svd(ut1, ut2, chi_max, theta=None, th_struct=(None, None),
     if perm_back:
         ut1.permute(lab1, ibn1)
         ut2.permute(lab2, ibn2)
+
+def site_svd(ut1, ut2, chi_max, merge_sv_right=True, cutoff=1e-10,
+             normalize=True, perm_back=True, show_sv=False):
+    bn1 = ut1.bondNum()
+    ibn1 = ut1.inBondNum()
+    ibn2 = ut2.inBondNum()
+    _, lab1 = in_out_bonds(ut1)
+    _, lab2 = in_out_bonds(ut2)
+    theta = ut1 * 1.
+    if merge_sv_right:
+        theta.permute(lab1[0] + lab1[1][1:] + lab1[1][:1], bn1-1)
+    else:
+        theta.permute(1)
+    svd = theta.getBlock().svd()
+    chi = min(chi_max, cutoff_dim(svd[1], cutoff))
+
+    svd[0].resize(svd[0].row(), chi)
+    svd[1].resize(chi, chi)
+    sv_norm = svd[1].norm()
+    if 0 < float(normalize) <= 1:
+        sv = svd[1] * (1./sv_norm)
+    elif 1 < float(normalize) < sv_norm:
+        sv = svd[1] * (np.sqrt(float(normalize))/sv_norm)
+    else:
+        sv = svd[1]
+    svd[2].resize(chi, svd[2].col())
+    if show_sv:
+        print exportElem(sv), sv_norm
+
+    bdth, labth = in_out_bonds(theta)
+    bdu = bdth[0] + [Bond(BD_OUT, chi)]
+    bdv = [Bond(BD_IN, chi)] + bdth[1]
+    if merge_sv_right:
+        ut1.assign(bdu)
+        V = UniTensor(bdv)
+        ut1.putBlock(svd[0])
+        V.putBlock(sv * svd[2])
+        ut1.setLabel(labth[0] + labth[1])
+        V.setLabel(labth[1] + [-1])
+        ut2.setLabel([-1] + lab2[0][1:] + lab2[1])
+        V = contract(V, ut2)
+        ut2.assign(V.bond())
+        ut2.setLabel(V.label())
+        ut2.putBlock(V.getBlock())
+    else:
+        U = UniTensor(bdu)
+        ut1.assign(bdv)
+        U.putBlock(svd[0] * sv)
+        ut1.putBlock(svd[2])
+        U.setLabel([-1] + labth[0])
+        ut1.setLabel(labth[0] + labth[1])
+        ut2.setLabel(lab2[0] + [-1] + lab2[1][1:])
+        U = contract(ut2, U)
+        ut2.assign(U.bond())
+        ut2.setLabel(U.label())
+        ut2.putBlock(U.getBlock())
+    if perm_back:
+        ut1.permute(lab1[0]+lab1[1], ibn1)
+        ut2.permute(lab2[0]+lab2[1], ibn2)
