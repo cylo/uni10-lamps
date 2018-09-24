@@ -132,15 +132,31 @@ class ClassifierMPS(MPS):
         net.putTensor("PHIR", img_data.phi_rn[idx+2])
         df = net.launch()
         return df
-    
-    def error_function(self, img_data, **kwargs):
+
+    def dcsfunc_custom(self, img_data, functor_df, refresh_phi_rn=True, functors_rn=[], **kwargs):
         """"""
-        ef = img_data.tl + (-1.)*self.decision_function(img_data, **kwargs)
+        assert self.__bdry_dummy, 'Boundary dummies not found.'
+        if site < 0: site = self.sl
+        if refresh_phi_rn: img_data.refresh_rn_custom(self, functors_rn, **kwargs)
+        df = functor_df(self, img_data, site)
+        return df
+
+    def error_function(self, img_data, dcsfn=None, **kwargs):
+        """"""
+        if dcsfn:
+            assert self.__bdry_dummy, 'Boundary dummies not found.'
+            ef = img_data.tl + (-1.)*dcsfn(self, img_data, **kwargs)
+        else:
+            ef = img_data.tl + (-1.)*self.decision_function(img_data, **kwargs)
         return ef
-    
-    def predict(self, img_data, verbose=False, **kwargs):
+
+    def predict(self, img_data, verbose=False, dcsfn=None, refresh_phi_rn=True, **kwargs):
         """"""
-        dfb = self.decision_function(img_data, **kwargs).getBlock()
+        if dcsfn:
+            if refresh_phi_rn: img_data.refresh_phi_rn(self)
+            dfb = dcsfn(self, img_data, **kwargs).getBlock()
+        else:
+            dfb = self.decision_function(img_data, refresh_phi_rn=refresh_phi_rn, **kwargs).getBlock()
         df = tensor_to_ndarray(dfb)
         if verbose:
             return df

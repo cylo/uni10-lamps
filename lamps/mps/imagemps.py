@@ -97,7 +97,8 @@ class ImageData(ImageMPS):
         self.dl = dim_l
         self.phi_rn = [UniTensor() for _ in xrange(self.len)]
         self.tl = true_label_vec(self.label, self.dl) if true_label != None else None
-            
+        self.rnb = None  # boundary of left/right/custom phi_rn
+
     def refresh_phi_rn(self, clsfy_mps):
         site_with_label_bond = clsfy_mps.sl
         for i in xrange(self.len):
@@ -106,7 +107,7 @@ class ImageData(ImageMPS):
             self.renorm_phi_left(clsfy_mps, i)
         for i in xrange(self.len-1, site_with_label_bond, -1):
             self.renorm_phi_right(clsfy_mps, i)
-    
+
     def renorm_phi_left(self, clsfy_mps, idx):
         """"""
         if idx == 0:
@@ -114,6 +115,8 @@ class ImageData(ImageMPS):
         else:
             self.phi_rn[idx] = contract(self.phi_rn[idx-1], clsfy_mps[idx], False)
         self.phi_rn[idx] = contract(self.phi_rn[idx], self.phi[idx], False)
+        if self.phi_rn[idx].inBondNum() > 1: self.phi_rn[idx].permute(1)
+        self.rnb = max(self.rnb, idx+1)
         
     def renorm_phi_right(self, clsfy_mps, idx):
         """"""
@@ -122,6 +125,30 @@ class ImageData(ImageMPS):
         else:
             self.phi_rn[idx] = contract(clsfy_mps[idx], self.phi_rn[idx+1], False)
         self.phi_rn[idx] = contract(self.phi_rn[idx], self.phi[idx], False)
+        if self.phi_rn[idx].inBondNum() > 1: self.phi_rn[idx].permute(1)
+        self.rnb = idx-1 if self.rnb == None else min(self.rnb, idx-1)
+
+    def refresh_rn_custom(self, clsfy_mps, functors=[], mode=0, **kwargs):
+        site_with_label_bond = clsfy_mps.sl
+        for i in xrange(self.len):
+            self.phi_rn[i] = UniTensor()
+        if len(functors) == 2 and mode == 0:
+            for i in xrange(site_with_label_bond):
+                self.rn_left_custom(clsfy_mps, i, functors[0], **kwargs)
+            for i in xrange(self.len-1, site_with_label_bond, -1):
+                self.rn_right_custom(clsfy_mps, i, functors[1], **kwargs)
+        else:
+            raise NotImplementedError
+
+    def rn_left_custom(self, clsfy_mps, idx, functor, **kwargs):
+        """"""
+        self.phi_rn[idx] = functor(self, clsfy_mps, idx, **kwargs)
+        self.rnb = max(self.rnb, idx+1)
+
+    def rn_right_custom(self, clsfy_mps, idx, functor, **kwargs):
+        """"""
+        self.phi_rn[idx] = functor(self, clsfy_mps, idx, **kwargs)
+        self.rnb = idx-1 if self.rnb == None else min(self.rnb, idx-1)
 
 
 class ImageDataSet(object):
@@ -172,6 +199,8 @@ class ImageDataSet(object):
             else:
                 self.phi_rn[s][idx] = contract(self.phi_rn[s][idx-1], clsfy_mps[idx], False)
             self.phi_rn[s][idx] = contract(self.phi_rn[s][idx], self.phi[s][idx], False)
+            if self.phi_rn[s][idx].inBondNum() > 1: self.phi_rn[s][idx].permute(1)
+            self.data[s].rnb = max(self.data[s].rnb, idx+1)
         
     def renorm_phi_right(self, clsfy_mps, idx):
         """"""
@@ -181,6 +210,8 @@ class ImageDataSet(object):
             else:
                 self.phi_rn[s][idx] = contract(clsfy_mps[idx], self.phi_rn[s][idx+1], False)
             self.phi_rn[s][idx] = contract(self.phi_rn[s][idx], self.phi[s][idx], False)
+            if self.phi_rn[s][idx].inBondNum() > 1: self.phi_rn[s][idx].permute(1)
+            self.data[s].rnb = idx-1 if self.data[s].rnb == None else min(self.data[s].rnb, idx-1)
     
     def update_phi_rn(self, clsfy_mps, idx, left_rn):
         """"""
@@ -188,3 +219,42 @@ class ImageDataSet(object):
             self.renorm_phi_left(clsfy_mps, idx)
         else:
             self.renorm_phi_right(clsfy_mps, idx)
+
+    def refresh_rn_custom(self, clsfy_mps, functors=[], mode=0, **kwargs):
+        """"""
+        for s in xrange(self.size):
+            for i in xrange(self.len):
+                self.phi_rn[s][i] = UniTensor()
+
+        site_with_label_bond = clsfy_mps.sl
+        if len(functors) == 2 and mode == 0:
+            for i in xrange(site_with_label_bond):
+                self.update_rn_custom(clsfy_mps, i, functors, mode=mode, flag="left", **kwargs)
+            for i in xrange(self.len-1, site_with_label_bond, -1):
+                self.update_rn_custom(clsfy_mps, i, functors, mode=mode, flag="right", **kwargs)
+        else:
+            raise NotImplementedError
+
+    def rn_left_custom(self, clsfy_mps, idx, functor, **kwargs):
+        """"""
+        for s in xrange(self.size):
+            self.phi_rn[s][idx] = functor(self, clsfy_mps, idx, **kwargs)
+            self.data[s].rnb = max(self.data[s].rnb, idx+1)
+
+    def rn_right_custom(self, clsfy_mps, idx, functor, **kwargs):
+        """"""
+        for s in xrange(self.size):
+            self.phi_rn[s][idx] = functor(self, clsfy_mps, idx, **kwargs)
+            self.data[s].rnb = idx-1 if self.data[s].rnb == None else min(self.data[s].rnb, idx-1)
+
+    def update_rn_custom(self, clsfy_mps, idx, functors=[], mode=0, flag=None, **kwargs):
+        """"""
+        if len(functors) == 2 and mode == 0:
+            if flag[0] == "l":
+                self.rn_left_custom(clsfy_mps, idx, functors[0], **kwargs)
+            elif flag[0] == "r":
+                self.rn_right_custom(clsfy_mps, idx, functors[1], **kwargs)
+            else:
+                raise AttributeError, "Unavailable flag in update_rn_custom()"
+        else:
+            raise NotImplementedError
