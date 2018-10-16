@@ -9,20 +9,20 @@ import shared
 class FixedGDOptimizer(object):
     """
     """
-    def __init__(self, image_set, clsfy_mps, networks, net_dir=shared.NETDIR, step_size=-1., mproc=None):
+    def __init__(self, image_set, clsfy_mps, networks, net_dir=shared.NETDIR+"/fixed-gdo", step_size=-1., mproc=None):
         """"""
         self.__d = image_set
         self.__w = clsfy_mps
         self.step = step_size if step_size > 0 else (1./float(self.__d.size))
         self.net = networks
         self.net_dir = net_dir
-        self.__load_networks(net_dir)
+        self.load_networks(net_dir)
         self.__d.refresh_phi_rn(self.__w)
         if mproc:
             shared.USE_MP = True
             shared.PROCS = int(mproc)
 
-    def __load_networks(self, net_dir=None):
+    def load_networks(self, net_dir=None):
         """"""
         if net_dir:
             self.net_dir = net_dir
@@ -30,6 +30,7 @@ class FixedGDOptimizer(object):
         self.net["bt_project_slr"] = Network(self.net_dir + "/bt_project_slr.net")
         self.net["decision_fn_sll"] = Network(self.net_dir + "/decision_fn_sll.net")
         self.net["decision_fn_slr"] = Network(self.net_dir + "/decision_fn_slr.net")
+        self.net["label_projection"] = Network(self.net_dir + "/label_projection.net")
 
     @staticmethod
     def decision_function(self, img_data, site=-1, left_to_right=True):

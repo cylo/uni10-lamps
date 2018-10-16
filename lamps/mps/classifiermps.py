@@ -1,11 +1,13 @@
 import os
 from imagemps import *
 from utils import tensor_to_ndarray
+import shared
 
 class ClassifierMPS(MPS):
     """
     """
-    def __init__(self, width, height, networks, chi_max=10, dim_label=10, site_with_label_bond=1,
+    def __init__(self, width, height, networks, net_dir=shared.NETDIR+"/clsfy-mps",
+                 chi_max=10, dim_label=10, site_with_label_bond=1,
                  dim_virt=1, dim_phys=2, bdry_dummy=True, phys_lab_base=1000):
         """"""
         self.wd = width
@@ -13,7 +15,6 @@ class ClassifierMPS(MPS):
         self.px = width*height
         MPS.__init__(self, self.px)
         
-        self.net = networks
         self.w = self._MPS__mps
         self.chi_max = min(chi_max, 1000) # chi < 1024 to fit pipe limit 64kbit
         self.dv = dim_virt
@@ -26,7 +27,20 @@ class ClassifierMPS(MPS):
         self.__bdry_dummy = bdry_dummy
         if bdry_dummy: self.attach_bdry_dummy()
         self.auto_labels()
-        
+
+        self.net = networks
+        self.net_dir = net_dir
+        self.load_networks(net_dir)
+
+    def load_networks(self, net_dir=None):
+        """"""
+        if net_dir:
+            self.net_dir = net_dir
+        self.net["decision_fn_left"] = Network(self.net_dir + "/decision_fn_left.net")
+        self.net["decision_fn_right"] = Network(self.net_dir + "/decision_fn_right.net")
+        self.net["measurement"] = Network(self.net_dir + "/measurement.net")
+        self.net["lvec_update"] = Network(self.net_dir + "/lvec_update.net")
+
     @classmethod
     def from_image_mps(cls, image_mps, networks, true_label=0, bdry_dummy=True, **kwargs):
         """"""

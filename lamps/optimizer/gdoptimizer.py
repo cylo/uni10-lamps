@@ -9,18 +9,25 @@ import shared
 class GDOptimizer(object):
     """
     """
-    def __init__(self, image_set, clsfy_mps, networks, step_size=-1., activation=None, mproc=None):
+    def __init__(self, image_set, clsfy_mps, networks, net_dir=shared.NETDIR+"/gdo", step_size=-1., mproc=None):
         """"""
         self.__d = image_set
         self.__w = clsfy_mps
         self.step = step_size if step_size > 0 else (1./float(self.__d.size))
-        self.actv = activation
         self.net = networks
+        self.net_dir = net_dir
+        self.load_networks(net_dir)
         self.__d.refresh_phi_rn(self.__w)
         if mproc:
             shared.USE_MP = True
             shared.PROCS = int(mproc)
-        
+
+    def load_networks(self, net_dir=None):
+        """"""
+        if net_dir:
+            self.net_dir = net_dir
+        self.net["label_projection"] = Network(self.net_dir + "/label_projection.net")
+
     def label_projection(self, label_vec, img_data, site=-1, sl_on_left=True, normalize_phi_rn=True):
         """"""
         if site < 0: site = self.__w.sl

@@ -9,15 +9,24 @@ import shared
 class DataSetCompressor(object):
     """
     """
-    def __init__(self, image_set, clsfy_mps, networks, mproc=None):
+    def __init__(self, image_set, clsfy_mps, networks, net_dir=shared.NETDIR+"/data-comp", mproc=None):
         """"""
         self.__d = image_set
         self.__w = clsfy_mps
         self.net = networks
+        self.net_dir = net_dir
+        self.load_networks(net_dir)
         self.__d.refresh_phi_rn(self.__w)
         if mproc:
             shared.USE_MP = True
             shared.PROCS = int(mproc)
+
+    def load_networks(self, net_dir=None):
+        """"""
+        if net_dir:
+            self.net_dir = net_dir
+        self.net["site_project"] = Network(self.net_dir + "/site_project.net")
+        self.net["sl_project"] = Network(self.net_dir + "/sl_project.net")
 
     def site_tensor_rn(self, site):
         """"""
