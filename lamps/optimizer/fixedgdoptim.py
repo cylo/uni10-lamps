@@ -6,27 +6,30 @@ from mps.classifiermps import *
 from utils import l2_norm
 import shared
 
-class FastGDOptimizer(object):
+class FixedGDOptimizer(object):
     """
     """
-    def __init__(self, image_set, clsfy_mps, networks, step_size=-1., mproc=None):
+    def __init__(self, image_set, clsfy_mps, networks, net_dir=shared.NETDIR, step_size=-1., mproc=None):
         """"""
         self.__d = image_set
         self.__w = clsfy_mps
         self.step = step_size if step_size > 0 else (1./float(self.__d.size))
         self.net = networks
-        self.__load_networks(shared.NETDIR)
+        self.net_dir = net_dir
+        self.__load_networks(net_dir)
         self.__d.refresh_phi_rn(self.__w)
         if mproc:
             shared.USE_MP = True
             shared.PROCS = int(mproc)
 
-    def __load_networks(self, net_dir=shared.NETDIR):
+    def __load_networks(self, net_dir=None):
         """"""
-        self.net["bt_project_sll"] = Network(net_dir + "/fast-gd-optim/bt_project_sll.net")
-        self.net["bt_project_slr"] = Network(net_dir + "/fast-gd-optim/bt_project_slr.net")
-        self.net["decision_fn_sll"] = Network(net_dir + "/fast-gd-optim/decision_fn_sll.net")
-        self.net["decision_fn_slr"] = Network(net_dir + "/fast-gd-optim/decision_fn_slr.net")
+        if net_dir:
+            self.net_dir = net_dir
+        self.net["bt_project_sll"] = Network(self.net_dir + "/bt_project_sll.net")
+        self.net["bt_project_slr"] = Network(self.net_dir + "/bt_project_slr.net")
+        self.net["decision_fn_sll"] = Network(self.net_dir + "/decision_fn_sll.net")
+        self.net["decision_fn_slr"] = Network(self.net_dir + "/decision_fn_slr.net")
 
     @staticmethod
     def decision_function(self, img_data, site=-1, left_to_right=True):
@@ -133,7 +136,7 @@ class FastGDOptimizer(object):
             os.environ["OMP_NUM_THREADS"] = str(shared.PROCS)
         else:
             for img_data in self.__d:
-                ef = self.__w.error_function(img_data, dcsfn=FastGDOptimizer.decision_function,
+                ef = self.__w.error_function(img_data, dcsfn=FixedGDOptimizer.decision_function,
                                              site=site, left_to_right=left_to_right)
                 dBn = self.label_projection(ef, img_data, site, left_to_right, normalize_phi_rn=normalize_phi_rn)
                 try:

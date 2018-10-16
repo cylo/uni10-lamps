@@ -4,7 +4,7 @@ from mps.mps import *
 from mps.imagemps import *
 from mps.classifiermps import *
 from optimizer.gdoptimizer import *
-from optimizer.fastgdoptim import *
+from optimizer.fixedgdoptim import *
 from optimizer.datacompressor import *
 from utils import *
 import shared
