@@ -12,6 +12,7 @@ from lamps.lamps import *
 if __name__ == '__main__':
 
     from var_mnist_learning import *
+    shared.OLD_VER = old_ver
 
     print "Training MNIST with",
     print "bond_dim_max={}, sweep={}, num_train={}, num_test={}, ...".format(m, sw, Ntrain, Ntest)

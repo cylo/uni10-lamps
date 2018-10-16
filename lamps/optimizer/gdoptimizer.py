@@ -19,6 +19,7 @@ class GDOptimizer(object):
         self.load_networks(net_dir)
         self.__d.refresh_phi_rn(self.__w)
         if mproc:
+            shared.OLD_VER = False
             shared.USE_MP = True
             shared.PROCS = int(mproc)
 

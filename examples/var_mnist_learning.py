@@ -23,4 +23,9 @@ show_feat_map = False
 sav_path = False
 
 ## number of procs for multi-processing (int/bool)
-procs = False
+## Warning: Vanilla pyUni10-1.0 does not support multiprocessing
+##          Always set procs = False when using vanilla pyUni10
+procs = 4
+
+## vanilla pyUni10? (bool)
+old_ver = True

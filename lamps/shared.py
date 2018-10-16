@@ -3,6 +3,7 @@
 ##          Always set USE_MP = False when using vanilla pyUni10
 import os
 
+OLD_VER = True
 USE_MP = False
 PROCS = 4
 PHI = []

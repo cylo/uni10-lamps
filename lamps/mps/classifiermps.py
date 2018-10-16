@@ -171,7 +171,7 @@ class ClassifierMPS(MPS):
             dfb = dcsfn(self, img_data, **kwargs).getBlock()
         else:
             dfb = self.decision_function(img_data, refresh_phi_rn=refresh_phi_rn, **kwargs).getBlock()
-        df = tensor_to_ndarray(dfb)
+        df = tensor_to_ndarray(dfb) if shared.OLD_VER else exportElem(dfb)
         if verbose:
             return df
         return np.argmax(df)

@@ -3,7 +3,7 @@ import multiprocessing as mp
 from itertools import izip
 
 from mps.classifiermps import *
-from utils import l2_norm
+from utils import l2_norm, matrix_to_ndarray
 import shared
 
 class FixedGDOptimizer(object):
@@ -19,6 +19,7 @@ class FixedGDOptimizer(object):
         self.load_networks(net_dir)
         self.__d.refresh_phi_rn(self.__w)
         if mproc:
+            shared.OLD_VER = False
             shared.USE_MP = True
             shared.PROCS = int(mproc)
 
@@ -262,7 +263,7 @@ def mp_fgd_ef_project(args):
     return exportElem(dB)
 
 
-def inv_phi_rn(phi_rn, old_ver=False):
+def inv_phi_rn(phi_rn, old_ver=shared.OLD_VER):
     """"""
     assert phi_rn.bondNum() == 2, "phi_rn's bond number != 2."
     inv = phi_rn * 1.

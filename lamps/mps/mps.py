@@ -2,6 +2,7 @@ from pyUni10 import *
 import numpy as np
 
 from utils import matrix_to_ndarray, tensor_to_ndarray
+import shared
 
 class MPS(object):
     """
@@ -212,7 +213,8 @@ def direct_sum(ut1, ut2, prod1=True, prod2=True):
     bd1[1][0] = Bond(BD_OUT, bd1[1][0].dim()+bd2[1][0].dim())
     bonds = bd1[0] + bd1[1]
     
-    ndsum = direct_sum_ndarray(matrix_to_ndarray(ut1.getBlock()), matrix_to_ndarray(ut2.getBlock()))
+    ndsum = direct_sum_ndarray(matrix_to_ndarray(ut1.getBlock()), matrix_to_ndarray(ut2.getBlock())) if shared.OLD_VER \
+        else direct_sum_ndarray(ut1.getBlock().nparray(), ut2.getBlock().nparray())
     dsum = UniTensor(bonds)
     dsum.setElem(np.reshape(ndsum, ndsum.size))
     return dsum
@@ -239,7 +241,8 @@ def concat(ut1, ut2, left_bdry=True, prod1=True, prod2=True):
         axis = 0
     bonds = bd1[0] + bd1[1]
     
-    ndsum = concat_ndarray(matrix_to_ndarray(ut1.getBlock()), matrix_to_ndarray(ut2.getBlock()), axis)
+    ndsum = concat_ndarray(matrix_to_ndarray(ut1.getBlock()), matrix_to_ndarray(ut2.getBlock()), axis) if shared.OLD_VER \
+        else concat_ndarray(ut1.getBlock().nparray(), ut2.getBlock().nparray(), axis)
     dsum = UniTensor(bonds)
     dsum.setElem(np.reshape(ndsum, ndsum.size))
     return dsum
