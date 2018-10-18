@@ -276,8 +276,8 @@ class ClassifierMPS(MPS):
             return img_mps.mps_to_img_snake(func)
         return img_mps.mps_to_img(func)
 
-    def generate_sample(self, img_data, copy_px=1,
-                        to_mps=grayscale_to_spinor, to_img=spinor_to_grayscale, snake=False):
+    def reconstruct_sample(self, img_data, copy_px=1,
+                           to_mps=grayscale_to_spinor, to_img=spinor_to_grayscale, snake=False):
         """"""
         assert self.__bdry_dummy and img_data._ImageMPS__bdry_dummy, 'Boundary dummies not found.'
 
@@ -334,6 +334,137 @@ class ClassifierMPS(MPS):
         for i in xrange(copy_px+1, self.px+1):
             wi = swl * 1. if i == self.sl else self.w[i] * 1.
             wd = wi * 1.
+            netm.putTensor("WI", wi)
+            netm.putTensor("WD", wd)
+            netm.putTensor("LV", lv[i-1])
+            netm.putTensor("RV", rv[i+1])
+            netm.putTensor("OP", NW)
+            nw = netm.launch()[0]
+            netm.putTensor("OP", NP)
+            np_ = netm.launch()[0]
+            netm.putTensor("OP", NG)
+            ng = netm.launch()[0]
+            netm.putTensor("OP", ND)
+            nd = netm.launch()[0]
+            netm.putTensor("OP", NB)
+            nb = netm.launch()[0]
+
+            netl.putTensor("WI", wi)
+            netl.putTensor("WD", wd)
+            netl.putTensor("LV", lv[i-1])
+            if max(nw, np_, ng, nd, nb) == nw:
+                res += [phi_w * 1.]
+                netl.putTensor("OP", NW)
+            elif max(nw, np_, ng, nd, nb) == np_:
+                res += [phi_p * 1.]
+                netl.putTensor("OP", NP)
+            elif max(nw, np_, ng, nd, nb) == ng:
+                res += [phi_g * 1.]
+                netl.putTensor("OP", NG)
+            elif max(nw, np_, ng, nd, nb) == nd:
+                res += [phi_d * 1.]
+                netl.putTensor("OP", ND)
+            else:
+                res += [phi_b * 1.]
+                netl.putTensor("OP", NB)
+            lv[i] = netl.launch()
+
+        # convert mps into image
+        img_mps = ImageMPS(np.zeros((self.wd, self.ht)))
+        img_mps.import_tensors(res)
+        if snake:
+            return img_mps.mps_to_img_snake(to_img)
+        return img_mps.mps_to_img(to_img)
+
+    def generate_sample(self, image_set, label=-1, seed_ratio=0.3, seed_from_label=True, num_chimera=3,
+                        to_mps=grayscale_to_spinor, to_img=spinor_to_grayscale, snake=False):
+        """"""
+        assert self.__bdry_dummy and image_set[0]._ImageMPS__bdry_dummy, 'Boundary dummies not found.'
+
+        # contract the selected label
+        if label < 0:
+            label = np.random.choice(range(self.dl))
+        lab_vec = true_label_vec(label, self.dl)
+        lab_vec.setLabel([-10])
+        swl = contract(lab_vec, self.w[self.sl])
+        swl.permute(self.w[self.sl].inBondNum()-1)
+
+        # define operators for measurement
+        phi_w = UniTensor([Bond(BD_IN, 2)]); phi_w.setElem(to_mps(0.00))  # white
+        phi_p = UniTensor([Bond(BD_IN, 2)]); phi_p.setElem(to_mps(0.25))  # pale
+        phi_g = UniTensor([Bond(BD_IN, 2)]); phi_g.setElem(to_mps(0.50))  # grey
+        phi_d = UniTensor([Bond(BD_IN, 2)]); phi_d.setElem(to_mps(0.75))  # dark
+        phi_b = UniTensor([Bond(BD_IN, 2)]); phi_b.setElem(to_mps(1.00))  # black
+        NW = otimes(phi_w, phi_w); NW.permute(1)
+        NP = otimes(phi_p, phi_p); NP.permute(1)
+        NG = otimes(phi_g, phi_g); NG.permute(1)
+        ND = otimes(phi_d, phi_d); ND.permute(1)
+        NB = otimes(phi_b, phi_b); NB.permute(1)
+
+        # seed crystals
+        seed_idx = np.sort(np.random.choice(range(1, self.px+1), int(self.px*seed_ratio), replace=False))
+        seed_phi = {}
+        seed_NI = {}
+
+        sample_idx = []
+        # random pick num_chimera samples
+        for n in xrange(num_chimera):
+            to_pick = False
+            while not to_pick:
+                s = np.random.choice(range(image_set.size))
+                if seed_from_label:
+                    to_pick = (image_set[s].label == label)
+                else:
+                    to_pick = True
+            sample_idx.append(s)
+
+        for i in seed_idx:
+            s = np.random.choice(sample_idx)
+            seed_phi[i] = image_set[s][i] * 1.
+            NI = otimes(image_set[s][i], image_set[s][i]); NI.permute(1)
+            seed_NI[i] = NI * 1.
+
+        # construct left-vec/right-vec buffer
+        lv = [UniTensor() for _ in xrange(self.len)]
+        rv = [UniTensor() for _ in xrange(self.len)]
+        for i in xrange(1):
+            wi = self.w[i] * 1.
+            wd = wi * 1.  # w^dagger
+            _ , labs = in_out_bonds(wi)
+            labs[1][0] *= -1
+            wd.setLabel(labs[0]+labs[1])
+            lv[i] = wi * wd
+
+        for i in xrange(self.len-1, 0, -1):
+            wi = swl * 1. if i == self.sl else self.w[i] * 1.
+            wd = wi * 1.
+            _ , labs = in_out_bonds(wi)
+            labs[0][0] *= -1
+            if i < self.len-1: labs[1][0] *= -1
+            wd.setLabel(labs[0]+labs[1])
+            if i in seed_idx:
+                lab_wd = list(wd.label()[:-1]) + [wd.label()[-1] * (-1)]
+                wd.setLabel(lab_wd)
+                NI = seed_NI[i]
+                # print wi.label(), wd.label()
+                NI.setLabel([wi.label()[2], wd.label()[2]])
+                rv[i] = wi * rv[i+1] * NI * wd
+            elif i == self.len-1:
+                rv[i] = wi * wd
+            else:
+                rv[i] =  wi * rv[i+1] * wd
+
+        # generative sampling
+        res = []
+        netm = self.net["measurement"]
+        netl = self.net["lvec_update"]
+        for i in xrange(1, self.px+1):
+            wi = swl * 1. if i == self.sl else self.w[i] * 1.
+            wd = wi * 1.
+            # if i in seed_idx:
+            #     res += [seed_phi[i] * 1.]
+            #     netl.putTensor("OP", seed_NI[i])
+            # else:
             netm.putTensor("WI", wi)
             netm.putTensor("WD", wd)
             netm.putTensor("LV", lv[i-1])
