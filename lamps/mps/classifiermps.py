@@ -288,16 +288,8 @@ class ClassifierMPS(MPS):
         swl.permute(self.w[self.sl].inBondNum()-1)
 
         # define operators for measurement
-        phi_w = UniTensor([Bond(BD_IN, 2)]); phi_w.setElem(to_mps(0.00))  # white
-        phi_p = UniTensor([Bond(BD_IN, 2)]); phi_p.setElem(to_mps(0.25))  # pale
-        phi_g = UniTensor([Bond(BD_IN, 2)]); phi_g.setElem(to_mps(0.50))  # grey
-        phi_d = UniTensor([Bond(BD_IN, 2)]); phi_d.setElem(to_mps(0.75))  # dark
-        phi_b = UniTensor([Bond(BD_IN, 2)]); phi_b.setElem(to_mps(1.00))  # black
-        NW = otimes(phi_w, phi_w); NW.permute(1)
-        NP = otimes(phi_p, phi_p); NP.permute(1)
-        NG = otimes(phi_g, phi_g); NG.permute(1)
-        ND = otimes(phi_d, phi_d); ND.permute(1)
-        NB = otimes(phi_b, phi_b); NB.permute(1)
+        (phi_w, phi_wp, phi_p, phi_pg, phi_g, phi_gd, phi_d, phi_db, phi_b), \
+            (NW, NWP, NP, NPG, NG, NGD, ND, NDB, NB) = self.grayscale_colors(to_mps)
 
         # construct left-vec/right-vec buffer
         lv = [UniTensor() for _ in xrange(self.len)]
@@ -340,30 +332,51 @@ class ClassifierMPS(MPS):
             netm.putTensor("RV", rv[i+1])
             netm.putTensor("OP", NW)
             nw = netm.launch()[0]
+            netm.putTensor("OP", NWP)
+            nwp = netm.launch()[0]
             netm.putTensor("OP", NP)
             np_ = netm.launch()[0]
+            netm.putTensor("OP", NPG)
+            npg = netm.launch()[0]
             netm.putTensor("OP", NG)
             ng = netm.launch()[0]
+            netm.putTensor("OP", NGD)
+            ngd = netm.launch()[0]
             netm.putTensor("OP", ND)
             nd = netm.launch()[0]
+            netm.putTensor("OP", NDB)
+            ndb = netm.launch()[0]
             netm.putTensor("OP", NB)
             nb = netm.launch()[0]
 
             netl.putTensor("WI", wi)
             netl.putTensor("WD", wd)
             netl.putTensor("LV", lv[i-1])
-            if max(nw, np_, ng, nd, nb) == nw:
+            max_color = max(nw, nwp, np_, npg, ng, ngd, nd, ndb, nb)
+            if max_color == nw:
                 res += [phi_w * 1.]
                 netl.putTensor("OP", NW)
-            elif max(nw, np_, ng, nd, nb) == np_:
+            elif max_color == nwp:
+                res += [phi_wp * 1.]
+                netl.putTensor("OP", NWP)
+            elif max_color == np_:
                 res += [phi_p * 1.]
                 netl.putTensor("OP", NP)
-            elif max(nw, np_, ng, nd, nb) == ng:
+            elif max_color == npg:
+                res += [phi_pg * 1.]
+                netl.putTensor("OP", NPG)
+            elif max_color == ng:
                 res += [phi_g * 1.]
                 netl.putTensor("OP", NG)
-            elif max(nw, np_, ng, nd, nb) == nd:
+            elif max_color == ngd:
+                res += [phi_gd * 1.]
+                netl.putTensor("OP", NGD)
+            elif max_color == nd:
                 res += [phi_d * 1.]
                 netl.putTensor("OP", ND)
+            elif max_color == ndb:
+                res += [phi_db * 1.]
+                netl.putTensor("OP", NDB)
             else:
                 res += [phi_b * 1.]
                 netl.putTensor("OP", NB)
@@ -390,16 +403,8 @@ class ClassifierMPS(MPS):
         swl.permute(self.w[self.sl].inBondNum()-1)
 
         # define operators for measurement
-        phi_w = UniTensor([Bond(BD_IN, 2)]); phi_w.setElem(to_mps(0.00))  # white
-        phi_p = UniTensor([Bond(BD_IN, 2)]); phi_p.setElem(to_mps(0.25))  # pale
-        phi_g = UniTensor([Bond(BD_IN, 2)]); phi_g.setElem(to_mps(0.50))  # grey
-        phi_d = UniTensor([Bond(BD_IN, 2)]); phi_d.setElem(to_mps(0.75))  # dark
-        phi_b = UniTensor([Bond(BD_IN, 2)]); phi_b.setElem(to_mps(1.00))  # black
-        NW = otimes(phi_w, phi_w); NW.permute(1)
-        NP = otimes(phi_p, phi_p); NP.permute(1)
-        NG = otimes(phi_g, phi_g); NG.permute(1)
-        ND = otimes(phi_d, phi_d); ND.permute(1)
-        NB = otimes(phi_b, phi_b); NB.permute(1)
+        (phi_w, phi_wp, phi_p, phi_pg, phi_g, phi_gd, phi_d, phi_db, phi_b), \
+            (NW, NWP, NP, NPG, NG, NGD, ND, NDB, NB) = self.grayscale_colors(to_mps)
 
         # seed crystals
         seed_idx = np.sort(np.random.choice(range(1, self.px+1), int(self.px*seed_ratio), replace=False))
@@ -462,6 +467,9 @@ class ClassifierMPS(MPS):
             wi = swl * 1. if i == self.sl else self.w[i] * 1.
             wd = wi * 1.
             # if i in seed_idx:
+            #     netl.putTensor("WI", wi)
+            #     netl.putTensor("WD", wd)
+            #     netl.putTensor("LV", lv[i-1])
             #     res += [seed_phi[i] * 1.]
             #     netl.putTensor("OP", seed_NI[i])
             # else:
@@ -471,30 +479,51 @@ class ClassifierMPS(MPS):
             netm.putTensor("RV", rv[i+1])
             netm.putTensor("OP", NW)
             nw = netm.launch()[0]
+            netm.putTensor("OP", NWP)
+            nwp = netm.launch()[0]
             netm.putTensor("OP", NP)
             np_ = netm.launch()[0]
+            netm.putTensor("OP", NPG)
+            npg = netm.launch()[0]
             netm.putTensor("OP", NG)
             ng = netm.launch()[0]
+            netm.putTensor("OP", NGD)
+            ngd = netm.launch()[0]
             netm.putTensor("OP", ND)
             nd = netm.launch()[0]
+            netm.putTensor("OP", NDB)
+            ndb = netm.launch()[0]
             netm.putTensor("OP", NB)
             nb = netm.launch()[0]
 
             netl.putTensor("WI", wi)
             netl.putTensor("WD", wd)
             netl.putTensor("LV", lv[i-1])
-            if max(nw, np_, ng, nd, nb) == nw:
+            max_color = max(nw, nwp, np_, npg, ng, ngd, nd, ndb, nb)
+            if max_color == nw:
                 res += [phi_w * 1.]
                 netl.putTensor("OP", NW)
-            elif max(nw, np_, ng, nd, nb) == np_:
+            elif max_color == nwp:
+                res += [phi_wp * 1.]
+                netl.putTensor("OP", NWP)
+            elif max_color == np_:
                 res += [phi_p * 1.]
                 netl.putTensor("OP", NP)
-            elif max(nw, np_, ng, nd, nb) == ng:
+            elif max_color == npg:
+                res += [phi_pg * 1.]
+                netl.putTensor("OP", NPG)
+            elif max_color == ng:
                 res += [phi_g * 1.]
                 netl.putTensor("OP", NG)
-            elif max(nw, np_, ng, nd, nb) == nd:
+            elif max_color == ngd:
+                res += [phi_gd * 1.]
+                netl.putTensor("OP", NGD)
+            elif max_color == nd:
                 res += [phi_d * 1.]
                 netl.putTensor("OP", ND)
+            elif max_color == ndb:
+                res += [phi_db * 1.]
+                netl.putTensor("OP", NDB)
             else:
                 res += [phi_b * 1.]
                 netl.putTensor("OP", NB)
@@ -506,3 +535,26 @@ class ClassifierMPS(MPS):
         if snake:
             return img_mps.mps_to_img_snake(to_img)
         return img_mps.mps_to_img(to_img)
+
+    def grayscale_colors(self, to_mps):
+        """"""
+        phi_w  = UniTensor([Bond(BD_IN, 2)]); phi_w.setElem(to_mps(0.00))  # white
+        phi_wp = UniTensor([Bond(BD_IN, 2)]); phi_wp.setElem(to_mps(0.125))
+        phi_p  = UniTensor([Bond(BD_IN, 2)]); phi_p.setElem(to_mps(0.25))  # pale
+        phi_pg = UniTensor([Bond(BD_IN, 2)]); phi_pg.setElem(to_mps(0.375))
+        phi_g  = UniTensor([Bond(BD_IN, 2)]); phi_g.setElem(to_mps(0.50))  # grey
+        phi_gd = UniTensor([Bond(BD_IN, 2)]); phi_gd.setElem(to_mps(0.625))
+        phi_d  = UniTensor([Bond(BD_IN, 2)]); phi_d.setElem(to_mps(0.75))  # dark
+        phi_db = UniTensor([Bond(BD_IN, 2)]); phi_db.setElem(to_mps(0.875))
+        phi_b  = UniTensor([Bond(BD_IN, 2)]); phi_b.setElem(to_mps(1.00))  # black
+        NW  = otimes(phi_w, phi_w); NW.permute(1)
+        NWP = otimes(phi_wp, phi_wp); NWP.permute(1)
+        NP  = otimes(phi_p, phi_p); NP.permute(1)
+        NPG = otimes(phi_pg, phi_pg); NPG.permute(1)
+        NG  = otimes(phi_g, phi_g); NG.permute(1)
+        NGD = otimes(phi_gd, phi_gd); NGD.permute(1)
+        ND  = otimes(phi_d, phi_d); ND.permute(1)
+        NDB = otimes(phi_db, phi_db); NDB.permute(1)
+        NB  = otimes(phi_b, phi_b); NB.permute(1)
+        return (phi_w, phi_wp, phi_p, phi_pg, phi_g, phi_gd, phi_d, phi_db, phi_b), \
+            (NW, NWP, NP, NPG, NG, NGD, ND, NDB, NB)
