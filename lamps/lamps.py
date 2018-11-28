@@ -1,5 +1,6 @@
 from preprocessing.pixelconverter import *
 from preprocessing.preprocgray import *
+from preprocessing.reorganize import *
 from mps.mps import *
 from mps.imagemps import *
 from mps.classifiermps import *

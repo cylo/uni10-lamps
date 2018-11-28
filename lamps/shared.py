@@ -10,5 +10,6 @@ PHI = []
 PHI_RN = []
 W = []
 TL = []
+BATCH = []
 NET = {}
 NETDIR = os.path.dirname(os.path.abspath(__file__)) + "/networks"

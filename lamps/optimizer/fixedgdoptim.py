@@ -3,6 +3,7 @@ import multiprocessing as mp
 from itertools import izip
 
 from mps.classifiermps import *
+from preprocessing.reorganize import shuffle_sample_idx, split_sample_idx
 from utils import l2_norm, matrix_to_ndarray
 import shared
 
@@ -109,7 +110,7 @@ class FixedGDOptimizer(object):
             B.permute(lab_new, 0)
         return B
 
-    def bond_tensor_grad(self, site=-1, left_to_right=True, normalize_phi_rn=True, **kwargs):
+    def bond_tensor_grad(self, site=-1, left_to_right=True, normalize_phi_rn=True, batch=None, **kwargs):
         """"""
         dB = UniTensor(); dBn = UniTensor()
         if site < 0: site = self.__d[0].rnb
@@ -120,13 +121,21 @@ class FixedGDOptimizer(object):
             shared.PHI_RN = self.__d.phi_rn
             shared.TL = self.__d.tl
             shared.NET = self.net
+            shared.BATCH = []
+            batch_size = len(batch) if batch else self.__d.size
+            proc_batch_size = batch_size//shared.PROCS
+            for i in xrange(shared.PROCS):
+                bat_i = proc_batch_size*i
+                bat_f = proc_batch_size*(i+1) if i < shared.PROCS-1 else batch_size
+                if batch:
+                    shared.BATCH.append(batch[bat_i:bat_f])
+                else:
+                    shared.BATCH.append(xrange(bat_i, bat_f))
             
             os.environ["OMP_NUM_THREADS"] = "1"
-            batch = (self.__d.size)//shared.PROCS
             pool = mp.Pool(shared.PROCS)
             res = pool.map(mp_fgd_ef_project,
-                           izip([batch*i for i in xrange(shared.PROCS)],
-                                [batch*(i+1) for i in xrange(shared.PROCS-1)]+[self.__d.size],
+                           izip(list(range(shared.PROCS)),
                                 [site for _ in xrange(shared.PROCS)],
                                 [self.__w.sl for _ in xrange(shared.PROCS)],
                                 [left_to_right for _ in xrange(shared.PROCS)],
@@ -137,7 +146,10 @@ class FixedGDOptimizer(object):
             pool.close()
             os.environ["OMP_NUM_THREADS"] = str(shared.PROCS)
         else:
-            for img_data in self.__d:
+            if not batch:
+                batch = xrange(self.__d.size)
+            for s in batch:
+                img_data = self.__d[s]
                 ef = self.__w.error_function(img_data, dcsfn=FixedGDOptimizer.decision_function,
                                              site=site, left_to_right=left_to_right)
                 dBn = self.label_projection(ef, img_data, site, left_to_right, normalize_phi_rn=normalize_phi_rn)
@@ -163,13 +175,13 @@ class FixedGDOptimizer(object):
         self.__w[idx].permute(lab1, ibn1)
         self.__w[idx+1].permute(lab2, ibn2)
 
-    def sweep(self, site_i, site_f, step_size=-1, left_to_right=True, normalize=True):
+    def sweep(self, site_i, site_f, step_size=-1, left_to_right=True, normalize=True, batch=None):
         """"""
         if step_size > 0: self.step = step_size
         inc = int(left_to_right)*2-1
         for site in xrange(site_i, site_f, inc):
             B = self.bond_tensor(site, left_to_right)
-            dB = self.bond_tensor_grad(site, left_to_right=left_to_right, normalize_phi_rn=normalize)
+            dB = self.bond_tensor_grad(site, left_to_right=left_to_right, normalize_phi_rn=normalize, batch=batch)
             B += self.step * dB
             self.update_w(B, site, left_to_right, normalize=normalize)
             self.__d.update_phi_rn(self.__w, site, left_to_right)
@@ -199,10 +211,46 @@ class FixedGDOptimizer(object):
             self.sweep(self.__d[0].rnb, self.__w.sl,
                        step_size=step_size, left_to_right=(forward and (sweeps-1)%2), normalize=normalize)
 
+    def stochastic_gradient_descent(self, batch_size, sweeps, site_term=1, step_size=-1, left_to_right=True, normalize=True):
+        """"""
+        ## shuffle samples
+        sample_shuffled = shuffle_sample_idx(range(self.__d.size))
+        ## split samples into batches
+        num_batch = self.__d.size//batch_size
+        sample_batch = split_sample_idx(sample_shuffled, batch_size)
+
+        forward = left_to_right; backward = not forward
+        site_start = 1 if left_to_right else self.__w.px
+        site_final = self.__w.px if left_to_right else 2
+        inc = int(left_to_right)*2-1
+
+        if self.__w._ClassifierMPS__bdry_dummy:
+            self.__w[0].identity()
+            self.__w[-1].identity()
+
+        if self.__w.sl != site_start:
+            self.sweep(self.__w.sl, site_start,
+                       step_size=step_size, left_to_right=backward, normalize=normalize, batch=sample_batch[0])
+        for s in xrange(sweeps):
+            if s%2 == 0:
+                self.sweep(site_start, site_final,
+                           step_size=step_size, left_to_right=forward, normalize=normalize, batch=sample_batch[s%num_batch])
+            else:
+                self.sweep(site_final, site_start,
+                           step_size=step_size, left_to_right=backward, normalize=normalize, batch=sample_batch[s%num_batch])
+            ## reshuffle samples after all samples are used
+            if (s+1)%num_batch == 0:
+                sample_shuffled = shuffle_sample_idx(sample_shuffled)
+                sample_batch = split_sample_idx(sample_shuffled, batch_size)
+        if self.__d[0].rnb != self.__w.sl:
+            self.sweep(self.__d[0].rnb, self.__w.sl,
+                       step_size=step_size, left_to_right=(forward and (sweeps-1)%2),
+                       normalize=normalize, batch=sample_batch[(sweeps-1)%num_batch])
+
 
 def mp_fgd_ef_project(args):
     """"""
-    sample_start, sample_end, site, sl_idx, left_to_right, normalize_phi_rn = args
+    batch_idx, site, sl_idx, left_to_right, normalize_phi_rn = args
     idx = site if left_to_right else site-1
     sl_in_left_rn = bool(idx > sl_idx)
     sl_in_right_rn = bool(idx+1 < sl_idx)
@@ -217,7 +265,7 @@ def mp_fgd_ef_project(args):
         netp = shared.NET["label_projection"]
     dB = UniTensor()
 
-    for s in xrange(sample_start, sample_end):
+    for s in shared.BATCH[batch_idx]:
         netd.putTensor("WI", shared.W[idx])
         netd.putTensor("WJ", shared.W[idx+1])
         netd.putTensor("PHIL", shared.PHI_RN[s][idx-1])
