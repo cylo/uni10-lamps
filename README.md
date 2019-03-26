@@ -2,8 +2,9 @@
 
 Learning / generative Adversarial network learning with Matrix Product States  
 
+Powered by [**pyUni10**](https://uni10-tutorials.readthedocs.io/en/latest/index.html) -- the python wrapper of [**Uni10**](https://github.com/yingjerkao/uni10) library (v1.0)  
 Based on "Supervised Learning with Quantum Inspired Tensor Networks" http://arxiv.org/abs/1605.05775  
-Powered by [**pyUni10**](https://uni10-tutorials.readthedocs.io/en/latest/index.html) -- the python wrapper of [**Uni10**](https://github.com/yingjerkao/uni10) library (v1.0)
+[My rigorous proof and further extension of the idea](https://goo.gl/tQRYCT)
 <br/><br/><br/>
 MNIST image examples ![sample](https://i.imgur.com/cfGZLpO.png) 
 
